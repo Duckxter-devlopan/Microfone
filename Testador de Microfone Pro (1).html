@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Testador de Microfone HTML5 — Diagnóstico de Áudio</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        slate: {
+                            850: '#151e2e',
+                            950: '#0a0f1a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen flex flex-col justify-between selection:bg-indigo-500 selection:text-white">
+
+    <!-- Cabeçalho Principal -->
+    <header class="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md sticky top-0 z-20">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                    <i data-lucide="mic" class="w-5 h-5 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg sm:text-xl font-bold tracking-tight text-white">MicCheck <span class="text-indigo-400 font-semibold">Studio</span></h1>
+                    <p class="text-xs text-slate-400">Diagnóstico de Áudio & Captura em Tempo Real</p>
+                </div>
+            </div>
+
+            <!-- Indicador de Status Dinâmico -->
+            <div id="statusBadge" class="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-slate-800/90 border border-slate-700/80 text-xs sm:text-sm font-medium transition-all duration-300">
+                <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+                <span id="statusText" class="text-slate-300">Pronto para testar</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Conteúdo Principal -->
+    <main class="flex-grow max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+
+        <!-- Banner de Diagnóstico de Contexto Seguro / Mobile (HTTPS, file://, WebView, iframe) -->
+        <div id="contextDiagnosticBanner" class="hidden rounded-2xl p-4 sm:p-5 bg-amber-950/80 border border-amber-500/50 text-amber-100 shadow-lg space-y-2.5" role="status">
+            <div class="flex items-start gap-3">
+                <i data-lucide="shield-alert" class="w-5 h-5 text-amber-400 shrink-0 mt-0.5"></i>
+                <div class="space-y-1.5 text-xs sm:text-sm">
+                    <p id="contextDiagnosticTitle" class="font-bold text-amber-300">Ambiente restrito detectado</p>
+                    <p id="contextDiagnosticDesc" class="text-amber-100/90 leading-relaxed"></p>
+                    <ul id="contextDiagnosticSteps" class="list-disc list-inside space-y-1 text-amber-200/90 pt-1"></ul>
+                </div>
+                    <button id="toggleTestBtn" type="button" class="w-full py-3.5 px-5 rounded-xl font-semibold text-sm text-white bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2.5 transition-all cursor-pointer">
+                        <i id="toggleTestIcon" data-lucide="mic" class="w-4 h-4"></i>
+                        <span id="toggleTestLabel">Ativar Microfone / Pedir Permissão</span>
+                    </button>
+                </div>
+
+            </div>
+
+            <!-- Opção Secundária: Áudio Bruto (Sem Filtros) -->
+            <div class="mt-4 pt-4 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <label for="rawAudioToggle" class="flex items-center gap-3 cursor-pointer select-none">
+                    <input id="rawAudioToggle" type="checkbox" class="w-4 h-4 rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-indigo-500/30 cursor-pointer">
+                    <div>
+                        <span class="text-xs sm:text-sm font-medium text-slate-200">Áudio Bruto (Sem Filtros)</span>
+                        <p class="text-[11px] text-slate-400">Desativa cancelamento de eco, supressão de ruído e ganho automático após conceder a permissão inicial.</p>
+                    </div>
+                </label>
+                <span id="audioModeBadge" class="self-start sm:self-center text-[11px] font-mono px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-slate-400">Modo: Padrão (Compatível)</span>
+            </div>
+        </section>
+
+        <!-- Cartão de Diagnóstico Técnico & Estado da Permissão -->
+        <section class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="terminal" class="w-4 h-4 text-cyan-400"></i>
+                    <h2 class="text-sm font-semibold text-slate-200">Diagnóstico Técnico & Permissão</h2>
+                </div>
+                <span id="permStateBadge" class="font-mono text-xs px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">Permissão: verificando...</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div class="bg-slate-950 border border-slate-800/90 rounded-xl p-3">
+                    <p class="text-[11px] text-slate-500">Protocolo & Contexto Seguro</p>
+                    <p id="diagProtocolText" class="font-mono font-semibold text-slate-200 mt-1">--</p>
+                </div>
+                <div class="bg-slate-950 border border-slate-800/90 rounded-xl p-3">
+                    <p class="text-[11px] text-slate-500">API navigator.mediaDevices</p>
+                    <p id="diagMediaApiText" class="font-mono font-semibold text-slate-200 mt-1">--</p>
+                </div>
+                <div class="bg-slate-950 border border-slate-800/90 rounded-xl p-3">
+                    <p class="text-[11px] text-slate-500">Estado da Permissão (OS/Browser)</p>
+                    <p id="diagPermText" class="font-mono font-semibold text-slate-200 mt-1">--</p>
+                </div>
+            </div>
+
+            <!-- Log Técnico em Tempo Real -->
+            <div class="bg-slate-950 border border-slate-800/90 rounded-xl p-3 font-mono text-xs space-y-1">
+                <div class="flex items-center justify-between text-[11px] text-slate-500">
+                    <span>Último Evento / Erro Capturado:</span>
+                    <span id="diagActiveLabel" class="text-indigo-400 truncate max-w-[60%]">Nenhum stream ativo</span>
+                </div>
+                <p id="diagLogText" class="text-slate-300 break-words">Aguardando toque no botão "Ativar Microfone / Pedir Permissão".</p>
+            </div>
+        </section>
+
+        <!-- Área Visual: Osciloscópio e Medidor de Volume (dB) -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Osciloscópio em Tempo Real -->
+            <div class="lg:col-span-8 bg-slate-900/90 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl flex flex-col justify-between space-y-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="activity" class="w-4 h-4 text-cyan-400"></i>
+                        <h2 class="text-sm font-semibold text-slate-200">Osciloscópio (Forma de Onda)</h2>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button id="modeWaveBtn" class="px-2.5 py-1 rounded-lg text-xs font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 transition-colors">Onda</button>
+                        <button id="modeFreqBtn" class="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-slate-200 border border-transparent transition-colors">Frequência</button>
+                    </div>
+                </div>
+
+                <!-- Container Responsivo do Canvas -->
+                <div id="canvasContainer" class="relative w-full h-52 sm:h-64 bg-slate-950 rounded-xl border border-slate-800/90 overflow-hidden">
+                    <canvas id="audioCanvas" class="block w-full h-full"></canvas>
+                    <!-- Sobreposição quando inativo -->
+                    <div id="canvasOverlay" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/75 backdrop-blur-[2px] text-center p-4 transition-opacity duration-300">
+                        <div class="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mb-2 text-slate-500">
+                            <i data-lucide="mic-off" class="w-5 h-5"></i>
+                        </div>
+                        <p class="text-sm font-medium text-slate-300">Sinal de áudio inativo</p>
+                        <p class="text-xs text-slate-500 mt-1 max-w-xs">Clique em "Iniciar Teste do Microfone" e fale algo para visualizar as ondas sonoras.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Medidor de Volume (Decibéis) e Telemetria -->
+            <div class="lg:col-span-4 flex flex-col gap-6">
+                
+                <!-- Medidor de Volume em Tempo Real -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl flex-1 flex flex-col justify-between space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="volume-2" class="w-4 h-4 text-emerald-400"></i>
+                            <h2 class="text-sm font-semibold text-slate-200">Nível de Entrada</h2>
+                        </div>
+                        <span id="dbValueText" class="font-mono text-sm font-semibold text-slate-300 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">-∞ dB</span>
+                    </div>
+
+                    <!-- Barra de Nível Gradiente + Segmentos -->
+                    <div class="space-y-2.5">
+                        <div class="w-full h-6 bg-slate-950 rounded-xl p-1 border border-slate-800 overflow-hidden relative">
+                            <div id="volumeBar" class="h-full w-0 rounded-lg bg-gradient-to-r from-emerald-500 via-amber-400 to-rose-500 transition-all duration-75 ease-out"></div>
+                        </div>
+                        <!-- Escala visual -->
+                        <div class="flex justify-between text-[11px] font-mono text-slate-500 px-1">
+                            <span>-60dB</span>
+                            <span>-40dB</span>
+                            <span>-20dB</span>
+                            <span>-6dB</span>
+                            <span class="text-rose-400">0dB</span>
+                        </div>
+                    </div>
+
+                    <!-- Indicador de Pico e Qualidade de Sinal -->
+                    <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
+                        <span class="text-slate-400">Pico máximo: <strong id="peakDbText" class="font-mono text-slate-200">-∞ dB</strong></span>
+                        <span id="signalQualityBadge" class="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 font-medium">Aguardando</span>
+                    </div>
+                </div>
+
+                <!-- Especificações Técnicas Detectadas -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
+                    <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <i data-lucide="cpu" class="w-3.5 h-3.5 text-indigo-400"></i>
+                        Propriedades do Stream
+                    </h3>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-3">
+                            <p class="text-[11px] text-slate-500">Taxa de Amostragem</p>
+                            <p id="sampleRateValue" class="font-mono text-sm sm:text-base font-semibold text-cyan-400 mt-0.5">-- Hz</p>
+                        </div>
+                        <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-3">
+                            <p class="text-[11px] text-slate-500">Canais Detectados</p>
+                            <p id="channelCountValue" class="font-mono text-sm sm:text-base font-semibold text-indigo-400 mt-0.5">--</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Seção de Gravação Rápida e Retorno (Playback) -->
+        <section class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="space-y-1">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="disc" class="w-4 h-4 text-rose-400"></i>
+                        <h2 class="text-base font-semibold text-white">Gravação Rápida & Retorno de Voz</h2>
+                    </div>
+                    <p class="text-xs sm:text-sm text-slate-400">Grave um trecho curto para ouvir exatamente como seu microfone está captando sua voz.</p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-3">
+                    <!-- Cronômetro da Gravação -->
+                    <div id="recTimerBox" class="hidden items-center gap-2 px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 font-mono text-sm font-semibold">
+                        <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+                        <span id="recTimer">00:00</span>
+                    </div>
+
+                    <!-- Botão Gravar / Parar Gravação -->
+                    <button id="recordBtn" type="button" class="py-2.5 px-4 rounded-xl font-semibold text-sm bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 flex items-center gap-2 transition-all cursor-pointer">
+                        <span id="recordDot" class="w-3 h-3 rounded-full bg-rose-500"></span>
+                        <span id="recordBtnLabel">Gravar Teste</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Player Embutido (Aparece após gravar) -->
+            <div id="playbackContainer" class="hidden mt-5 pt-5 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 animate-fadeIn">
+                <div class="flex items-center gap-3 w-full sm:w-auto">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                        <i data-lucide="file-audio" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-slate-200">Amostra de Áudio Gravada</p>
+                        <p id="recordingMeta" class="text-xs text-slate-400">Pronta para reprodução</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 w-full sm:w-auto flex-1 max-w-xl">
+                    <audio id="audioPlayback" controls class="w-full h-10 rounded-lg accent-indigo-500"></audio>
+                    <a id="downloadAudioBtn" href="#" download="teste-microfone.webm" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors shrink-0" title="Baixar gravação">
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Rodapé -->
+    <footer class="border-t border-slate-800/60 py-4 px-4 sm:px-6 text-center text-xs text-slate-500">
+        <p>Todo o processamento de áudio ocorre localmente no seu navegador via Web Audio API. Nenhum dado é enviado para servidores externos.</p>
+    </footer>
+
+    <script>
+        /**
+         * Inicialização dos ícones Lucide e encapsulamento da lógica do aplicativo
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            initMicTester();
+        });
+
+        function initMicTester() {
+            // Referências dos elementos do DOM
+            const deviceSelect = document.getElementById('deviceSelect');
+            const refreshDevicesBtn = document.getElementById('refreshDevicesBtn');
+            const toggleTestBtn = document.getElementById('toggleTestBtn');
+            const toggleTestIcon = document.getElementById('toggleTestIcon');
+            const toggleTestLabel = document.getElementById('toggleTestLabel');
+            const rawAudioToggle = document.getElementById('rawAudioToggle');
+            const audioModeBadge = document.getElementById('audioModeBadge');
+
+            const permStateBadge = document.getElementById('permStateBadge');
+            const diagProtocolText = document.getElementById('diagProtocolText');
+            const diagMediaApiText = document.getElementById('diagMediaApiText');
+            const diagPermText = document.getElementById('diagPermText');
+            const diagActiveLabel = document.getElementById('diagActiveLabel');
+            const diagLogText = document.getElementById('diagLogText');
+
+            const statusBadge = document.getElementById('statusBadge');
+// ... existing code ... -->
+            let recTimerInterval = null;
+            let recStartTime = 0;
+            let recordedBlobUrl = null;
+            let currentMimeType = '';
+
+            /**
+             * Atualiza o log técnico na tela para diagnóstico mobile
+             */
+            function logDiag(message, isError = false) {
+                diagLogText.textContent = message;
+                diagLogText.classList.remove('text-slate-300', 'text-emerald-400', 'text-rose-400');
+                diagLogText.classList.add(isError ? 'text-rose-400' : 'text-emerald-400');
+            }
+
+            /**
+             * Monitora passivamente a Permissions API sem bloquear o clique do usuário
+             */
+            function initPassivePermissionMonitor() {
+                const proto = window.location.protocol;
+                const secure = window.isSecureContext;
+                diagProtocolText.textContent = `${proto} (${secure ? 'Seguro' : 'Inseguro'})`;
+                diagProtocolText.className = `font-mono font-semibold mt-1 ${secure ? 'text-emerald-400' : 'text-rose-400'}`;
+
+                const hasApi = !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function');
+                diagMediaApiText.textContent = hasApi ? 'Disponível' : 'Indisponível';
+                diagMediaApiText.className = `font-mono font-semibold mt-1 ${hasApi ? 'text-emerald-400' : 'text-rose-400'}`;
+
+                const applyPermState = (state) => {
+                    if (state === 'prompt') {
+                        diagPermText.textContent = 'prompt (pronto para pedir)';
+                        diagPermText.className = 'font-mono font-semibold mt-1 text-amber-400';
+                        permStateBadge.textContent = 'Permissão: prompt (pronto)';
+                        permStateBadge.className = 'font-mono text-xs px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300';
+                    } else if (state === 'granted') {
+                        diagPermText.textContent = 'granted (permitido)';
+                        diagPermText.className = 'font-mono font-semibold mt-1 text-emerald-400';
+                        permStateBadge.textContent = 'Permissão: granted (permitido)';
+                        permStateBadge.className = 'font-mono text-xs px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300';
+                    } else if (state === 'denied') {
+                        diagPermText.textContent = 'denied (bloqueado)';
+                        diagPermText.className = 'font-mono font-semibold mt-1 text-rose-400';
+                        permStateBadge.textContent = 'Permissão: denied (bloqueado)';
+                        permStateBadge.className = 'font-mono text-xs px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300';
+                    } else {
+                        diagPermText.textContent = `${state}`;
+                        diagPermText.className = 'font-mono font-semibold mt-1 text-slate-300';
+                        permStateBadge.textContent = `Permissão: ${state}`;
+                    }
+                };
+
+                if (navigator.permissions && typeof navigator.permissions.query === 'function') {
+                    navigator.permissions.query({ name: 'microphone' })
+                        .then((permStatus) => {
+                            applyPermState(permStatus.state);
+                            permStatus.onchange = () => {
+                                applyPermState(permStatus.state);
+                            };
+                        })
+                        .catch(() => {
+                            applyPermState('não reportado pelo navegador');
+                        });
+                } else {
+                    applyPermState('API indisponível (solicitará ao clicar)');
+                }
+            }
+
+            /**
+             * Ajusta a resolução interna do canvas ao tamanho real do container
+             */
+// ... existing code ... -->
+            /**
+             * Diagnóstico inicial do ambiente mobile (HTTPS, file://, WebView, iframe)
+             */
+            function runEnvironmentDiagnostics() {
+                const isIframe = window.self !== window.top;
+                const isFileProtocol = window.location.protocol === 'file:';
+                const isSecure = window.isSecureContext;
+                const hasMediaDevices = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+
+                if (!isSecure || !hasMediaDevices || isFileProtocol || isIframe) {
+                    contextDiagnosticBanner.classList.remove('hidden');
+                    contextDiagnosticSteps.innerHTML = '';
+                    const steps = [];
+
+                    if (isFileProtocol) {
+                        contextDiagnosticTitle.textContent = 'Arquivo aberto localmente (file://) — Microfone bloqueado pelo navegador';
+                        contextDiagnosticDesc.textContent = 'Navegadores mobile (Chrome, Safari, Firefox) bloqueiam o acesso ao microfone quando o HTML é aberto diretamente dos arquivos do celular (file://).';
+                        steps.push('Acesse via GitHub Pages (https://...) ou servidor local http://localhost.');
+                    } else if (!isSecure || !hasMediaDevices) {
+                        contextDiagnosticTitle.textContent = 'Conexão não segura (HTTP) ou WebView interna sem suporte';
+                        contextDiagnosticDesc.textContent = 'A API de microfone exige HTTPS e um navegador completo (Chrome, Safari, Edge). Navegadores embutidos dentro de outros apps costumam bloquear o pedido.';
+                        steps.push('Se você abriu o link do GitHub Pages pelo WhatsApp, Instagram ou app do GitHub, toque no menu (⋮) e escolha "Abrir no Chrome" ou "Abrir no navegador".');
+                        steps.push('Confirme se o endereço começa com https://.');
+                    } else if (isIframe) {
+                        contextDiagnosticTitle.textContent = 'Executando dentro de um quadro embutido (iframe)';
+                        contextDiagnosticDesc.textContent = 'Se o navegador não exibir o pedido de permissão, abra a URL diretamente em uma aba independente do Chrome/Safari.';
+                        steps.push('Abra o link do GitHub Pages diretamente na barra de endereços do navegador.');
+                    }
+
+                    steps.forEach(stepText => {
+                        const li = document.createElement('li');
+                        li.textContent = stepText;
+                        contextDiagnosticSteps.appendChild(li);
+                    });
+                }
+            }
+
+            /**
+             * Exibe mensagens de alerta amigáveis na interface com passo a passo opcional (sem usar alert())
+             */
+// ... existing code ... -->
+            /**
+             * Conecta um MediaStream ativo ao AudioContext, AnalyserNode e atualiza a UI
+             */
+            async function setupAudioPipelineFromStream(stream, isRawMode) {
+                mediaStream = stream;
+
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!audioContext || audioContext.state === 'closed') {
+                    audioContext = new AudioCtx();
+                }
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                }
+
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 2048;
+                analyser.smoothingTimeConstant = 0.85;
+
+                sourceNode = audioContext.createMediaStreamSource(mediaStream);
+                sourceNode.connect(analyser);
+
+                // Atualiza lista de dispositivos agora que a permissão foi concedida
+                await populateAudioDevices();
+                const activeTrack = mediaStream.getAudioTracks()[0];
+                const trackSettings = activeTrack ? activeTrack.getSettings() : {};
+                if (trackSettings.deviceId) {
+                    deviceSelect.value = trackSettings.deviceId;
+                }
+
+                // Atualiza Telemetria (Taxa de Amostragem, Canais e Nome do Dispositivo)
+                const sampleRate = trackSettings.sampleRate || audioContext.sampleRate;
+                const channels = trackSettings.channelCount || sourceNode.channelCount || 1;
+                const trackLabel = (activeTrack && activeTrack.label) ? activeTrack.label : 'Microfone Padrão';
+
+                sampleRateValue.textContent = `${sampleRate.toLocaleString('pt-BR')} Hz`;
+                channelCountValue.textContent = channels === 1 ? '1 (Mono)' : `${channels} (Estéreo)`;
+                diagActiveLabel.textContent = trackLabel;
+
+                audioModeBadge.textContent = isRawMode ? 'Modo: Áudio Bruto (Sem Filtros)' : 'Modo: Padrão (Compatível)';
+                logDiag(`Stream ativo: "${trackLabel}" (${sampleRate} Hz, ${channels} ch).`);
+
+                // Atualiza Estado da UI
+                isTesting = true;
+                peakDb = -Infinity;
+                canvasOverlay.classList.add('opacity-0', 'pointer-events-none');
+                updateStatus('active', 'Microfone ativo');
+
+                toggleTestBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-500', 'shadow-indigo-600/25');
+                toggleTestBtn.classList.add('bg-rose-600', 'hover:bg-rose-500', 'shadow-rose-600/25');
+                toggleTestIcon.setAttribute('data-lucide', 'square');
+                toggleTestLabel.textContent = 'Parar Teste do Microfone';
+                lucide.createIcons();
+
+                // Inicia loop de renderização
+                renderAudioLoop();
+            }
+
+            /**
+             * Trata erros retornados por getUserMedia com detalhes exatos e guia de desbloqueio mobile
+             */
+            function handleGetUserMediaError(err) {
+                console.error('Erro getUserMedia:', err);
+                isTesting = false;
+                const errName = err && err.name ? err.name : 'ErroDesconhecido';
+                const errMsg = err && err.message ? err.message : 'Falha sem mensagem detalhada';
+
+                logDiag(`Erro ${errName}: ${errMsg}`, true);
+                updateStatus('error', `Falha (${errName})`);
+
+                if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
+                    showAlert(
+                        'error',
+                        `Permissão Negada (${errName})`,
+                        `O navegador ou o sistema Android/iOS bloqueou o microfone (${errMsg}). Se o pop-up de permissão nem apareceu, a permissão já está marcada como bloqueada anteriormente ou o link abriu dentro de um app.`,
+                        [
+                            'Se abriu o link pelo WhatsApp, Instagram ou GitHub app: toque nos 3 pontinhos (⋮) e selecione "Abrir no Chrome" (ou Safari no iOS).',
+                            'No Chrome do celular: toque no ícone de configurações/cadeado ao lado do endereço do site > Permissões > toque em "Microfone" e mude para "Permitir" (ou toque em "Redefinir permissões").',
+                            'No Android (Configurações do sistema): abra Configurações > Apps > Chrome > Permissões > Microfone > selecione "Permitir durante o uso do app".',
+                            'Após alterar, recarregue esta página e toque em "Ativar Microfone / Pedir Permissão".'
+                        ]
+                    );
+                } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
+                    showAlert(
+                        'error',
+                        `Nenhum Microfone Encontrado (${errName})`,
+                        `O sistema não localizou nenhum dispositivo de entrada de áudio (${errMsg}).`,
+                        [
+                            'Verifique se há fone Bluetooth ou adaptador USB-C conectado e desconecte para testar o microfone interno.',
+                            'Reinicie o navegador caso o hardware de áudio tenha travado.'
+                        ]
+                    );
+                } else if (errName === 'NotReadableError' || errName === 'TrackStartError') {
+                    showAlert(
+                        'error',
+                        `Microfone Ocupado por Outro App (${errName})`,
+                        `Outro aplicativo está usando o microfone no momento (${errMsg}).`,
+                        [
+                            'Feche chamadas de voz, gravadores ou apps em segundo plano.',
+                            'Toque novamente em "Ativar Microfone / Pedir Permissão".'
+                        ]
+                    );
+                } else if (errName === 'SecurityError' || errName === 'TypeError') {
+                    showAlert(
+                        'error',
+                        `Contexto de Segurança Inválido (${errName})`,
+                        `O navegador exige HTTPS ou localhost para liberar o microfone (${errMsg}).`,
+                        [
+                            'Certifique-se de que a URL na barra de endereços começa com https://.'
+                        ]
+                    );
+                } else {
+                    showAlert(
+                        'error',
+                        `Erro ao Acessar Microfone (${errName})`,
+                        `Detalhes técnicos: ${errMsg}. Tente recarregar a página no Chrome ou Safari.`
+                    );
+                }
+            }
+
+            /**
+             * Handler síncrono direto do botão principal:
+             * A PRIMEIRA instrução executada no clique é navigator.mediaDevices.getUserMedia({ audio: true })
+             * sem await/async prévio, garantindo ativação imediata do pop-up nativo no mobile.
+             */
+            function handlePrimaryMicButtonClick() {
+                if (isTesting) {
+                    stopMicTest(true);
+                    return;
+                }
+
+                if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+                    logDiag('Erro: navigator.mediaDevices.getUserMedia indisponível neste navegador/contexto.', true);
+                    showAlert(
+                        'error',
+                        'API de Microfone Indisponível',
+                        'Este navegador ou janela interna (WebView) não disponibiliza navigator.mediaDevices.getUserMedia.',
+                        [
+                            'Toque no menu (⋮) do aplicativo e escolha "Abrir no Chrome" ou "Abrir no navegador".',
+                            'Verifique se o site está carregado via https://.'
+                        ]
+                    );
+                    return;
+                }
+
+                // Chamada síncrona imediata dentro do gesto do usuário (sem código assíncrono antes)
+                const selectedDeviceId = deviceSelect.value;
+                const constraints = selectedDeviceId
+                    ? { audio: { deviceId: { exact: selectedDeviceId } } }
+                    : { audio: true };
+
+                const permissionPromise = navigator.mediaDevices.getUserMedia(constraints);
+
+                hideAlert();
+                rawAudioToggle.checked = false;
+                logDiag('Solicitando permissão do microfone ao navegador...');
+
+                permissionPromise
+                    .then((stream) => setupAudioPipelineFromStream(stream, false))
+                    .catch((err) => handleGetUserMediaError(err));
+            }
+
+            /**
+             * Alterna entre áudio padrão e áudio bruto (sem filtros) somente após permissão concedida
+             */
+            function handleRawAudioToggle() {
+                const wantRaw = rawAudioToggle.checked;
+
+                if (!isTesting) {
+                    audioModeBadge.textContent = wantRaw
+                        ? 'Modo: Áudio Bruto (será aplicado após ativar)'
+                        : 'Modo: Padrão (Compatível)';
+                    return;
+                }
+
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+
+                const selectedDeviceId = deviceSelect.value;
+                const rawConstraints = wantRaw
+                    ? {
+                        audio: {
+                            ...(selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : {}),
+                            echoCancellation: false,
+                            noiseSuppression: false,
+                            autoGainControl: false
+                        }
+                    }
+                    : (selectedDeviceId ? { audio: { deviceId: { exact: selectedDeviceId } } } : { audio: true });
+
+                const reqPromise = navigator.mediaDevices.getUserMedia(rawConstraints);
+                logDiag(wantRaw ? 'Requisitando áudio bruto sem filtros...' : 'Voltando para áudio padrão...');
+
+                reqPromise
+                    .then((newStream) => {
+                        stopMicTest(false);
+                        return setupAudioPipelineFromStream(newStream, wantRaw);
+                    })
+                    .catch((err) => {
+                        rawAudioToggle.checked = !wantRaw;
+                        logDiag(`Seu aparelho não suportou alternar filtros (${err.name}): ${err.message}`, true);
+                        showAlert(
+                            'warning',
+                            'Modo Áudio Bruto Não Suportado pelo Hardware',
+                            `O driver de áudio deste celular rejeitou a alteração de filtros (${err.name}: ${err.message}). O modo padrão compatível foi mantido.`
+                        );
+                    });
+            }
+
+            /**
+             * Encerra a captura de áudio e limpa recursos
+             */
+            function stopMicTest(resetUi = true) {
+                isTesting = false;
+
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
+                }
+
+                if (sourceNode) {
+                    try { sourceNode.disconnect(); } catch (e) {}
+                    sourceNode = null;
+                }
+
+                if (mediaStream) {
+                    mediaStream.getTracks().forEach(track => track.stop());
+                    mediaStream = null;
+                }
+
+                if (resetUi) {
+                    canvasOverlay.classList.remove('opacity-0', 'pointer-events-none');
+                    updateStatus('idle', 'Teste encerrado');
+
+                    toggleTestBtn.classList.remove('bg-rose-600', 'hover:bg-rose-500', 'shadow-rose-600/25');
+                    toggleTestBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-500', 'shadow-indigo-600/25');
+                    toggleTestIcon.setAttribute('data-lucide', 'mic');
+                    toggleTestLabel.textContent = 'Ativar Microfone / Pedir Permissão';
+                    lucide.createIcons();
+
+                    // Limpa medidores
+                    volumeBar.style.width = '0%';
+                    dbValueText.textContent = '-∞ dB';
+                    signalQualityBadge.textContent = 'Aguardando';
+                    signalQualityBadge.className = 'px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 font-medium';
+                    diagActiveLabel.textContent = 'Nenhum stream ativo';
+                    logDiag('Captura encerrada pelo usuário.');
+                    drawIdleGrid();
+                }
+            }
+
+            /**
+             * Atualiza o indicador de status no cabeçalho
+             */
+// ... existing code ... -->
+            /**
+             * Inicia ou para a gravação rápida usando MediaRecorder com detecção automática de MIME para Android/iOS
+             */
+            async function toggleRecording() {
+                if (isRecording) {
+                    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                        mediaRecorder.stop();
+                    }
+                    return;
+                }
+
+                // Se o teste não estiver ativo, dispara getUserMedia diretamente
+                if (!isTesting || !mediaStream) {
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+                    navigator.mediaDevices.getUserMedia({ audio: true })
+                        .then((stream) => setupAudioPipelineFromStream(stream, false))
+                        .then(() => {
+                            if (isTesting && mediaStream) startMediaRecorder();
+                        })
+                        .catch((err) => handleGetUserMediaError(err));
+                    return;
+                }
+
+                startMediaRecorder();
+            }
+
+            function startMediaRecorder() {
+                try {
+                    recordedChunks = [];
+                    const mimeTypes = [
+                        'audio/webm;codecs=opus',
+                        'audio/webm',
+                        'audio/mp4',
+                        'audio/ogg;codecs=opus'
+                    ];
+                    currentMimeType = '';
+                    if (window.MediaRecorder && typeof MediaRecorder.isTypeSupported === 'function') {
+                        currentMimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || '';
+                    }
+
+                    mediaRecorder = currentMimeType
+                        ? new MediaRecorder(mediaStream, { mimeType: currentMimeType })
+                        : new MediaRecorder(mediaStream);
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data && event.data.size > 0) {
+                            recordedChunks.push(event.data);
+                        }
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        isRecording = false;
+                        clearInterval(recTimerInterval);
+                        recTimerBox.classList.add('hidden');
+                        recTimerBox.classList.remove('flex');
+
+                        recordBtn.classList.remove('bg-rose-600', 'hover:bg-rose-500', 'border-rose-500', 'text-white');
+                        recordBtn.classList.add('bg-slate-800', 'hover:bg-slate-700', 'border-slate-700', 'text-slate-100');
+                        recordDot.classList.remove('animate-pulse', 'bg-white');
+                        recordDot.classList.add('bg-rose-500');
+                        recordBtnLabel.textContent = 'Gravar Novo Teste';
+
+                        if (recordedBlobUrl) {
+                            URL.revokeObjectURL(recordedBlobUrl);
+                        }
+
+                        const finalType = mediaRecorder.mimeType || currentMimeType || 'audio/webm';
+                        const ext = finalType.includes('mp4') ? 'm4a' : (finalType.includes('ogg') ? 'ogg' : 'webm');
+                        const audioBlob = new Blob(recordedChunks, { type: finalType });
+                        recordedBlobUrl = URL.createObjectURL(audioBlob);
+
+                        audioPlayback.src = recordedBlobUrl;
+                        downloadAudioBtn.href = recordedBlobUrl;
+                        downloadAudioBtn.download = `teste-microfone.${ext}`;
+
+                        const sizeKb = (audioBlob.size / 1024).toFixed(1);
+                        recordingMeta.textContent = `Duração: ${recTimer.textContent} • Tamanho: ${sizeKb} KB (${ext.toUpperCase()})`;
+                        playbackContainer.classList.remove('hidden');
+                        logDiag(`Gravação concluída (${sizeKb} KB, formato ${finalType}).`);
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+
+                    // Atualiza UI de gravação
+                    recTimer.textContent = '00:00';
+                    recTimerBox.classList.remove('hidden');
+                    recTimerBox.classList.add('flex');
+
+                    recordBtn.classList.remove('bg-slate-800', 'hover:bg-slate-700', 'border-slate-700', 'text-slate-100');
+                    recordBtn.classList.add('bg-rose-600', 'hover:bg-rose-500', 'border-rose-500', 'text-white');
+                    recordDot.classList.remove('bg-rose-500');
+                    recordDot.classList.add('bg-white', 'animate-pulse');
+                    recordBtnLabel.textContent = 'Parar Gravação';
+
+                    recStartTime = Date.now();
+                    recTimerInterval = setInterval(() => {
+                        const elapsed = Math.floor((Date.now() - recStartTime) / 1000);
+                        const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
+                        const secs = String(elapsed % 60).padStart(2, '0');
+                        recTimer.textContent = `${mins}:${secs}`;
+                    }, 500);
+
+                } catch (err) {
+                    console.error('Erro ao iniciar MediaRecorder:', err);
+                    logDiag(`Erro no gravador (${err.name}): ${err.message}`, true);
+                    showAlert('error', 'Gravação indisponível', `Não foi possível iniciar o gravador de áudio neste navegador (${err.name}).`);
+                }
+            }
+
+            // Listeners de Eventos
+            toggleTestBtn.addEventListener('click', handlePrimaryMicButtonClick);
+            rawAudioToggle.addEventListener('change', handleRawAudioToggle);
+
+            refreshDevicesBtn.addEventListener('click', () => {
+                populateAudioDevices();
+            });
+
+            deviceSelect.addEventListener('change', () => {
+                if (isTesting) {
+                    const selectedDeviceId = deviceSelect.value;
+                    const constraints = selectedDeviceId
+                        ? { audio: { deviceId: { exact: selectedDeviceId } } }
+                        : { audio: true };
+                    navigator.mediaDevices.getUserMedia(constraints)
+                        .then((newStream) => {
+                            stopMicTest(false);
+                            return setupAudioPipelineFromStream(newStream, rawAudioToggle.checked);
+                        })
+                        .catch((err) => handleGetUserMediaError(err));
+                }
+            });
+
+            modeWaveBtn.addEventListener('click', () => {
+                visualMode = 'wave';
+                modeWaveBtn.className = 'px-2.5 py-1 rounded-lg text-xs font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 transition-colors';
+                modeFreqBtn.className = 'px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-slate-200 border border-transparent transition-colors';
+            });
+
+            modeFreqBtn.addEventListener('click', () => {
+                visualMode = 'freq';
+                modeFreqBtn.className = 'px-2.5 py-1 rounded-lg text-xs font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 transition-colors';
+                modeWaveBtn.className = 'px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 hover:text-slate-200 border border-transparent transition-colors';
+            });
+
+            recordBtn.addEventListener('click', toggleRecording);
+
+            // Atualiza lista automaticamente quando dispositivos USB/Bluetooth são conectados ou desconectados
+            if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+                navigator.mediaDevices.addEventListener('devicechange', populateAudioDevices);
+            }
+
+            // Executa diagnóstico de ambiente mobile, monitora permissões passivamente e carrega dispositivos iniciais
+            runEnvironmentDiagnostics();
+            initPassivePermissionMonitor();
+            populateAudioDevices();
+        }
+    </script>
+</body>
+</html>
